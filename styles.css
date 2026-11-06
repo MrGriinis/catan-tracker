@@ -54,6 +54,7 @@ select, input:not([type=checkbox]):not([type=range]) {
   background: var(--surface); border: 1px solid var(--hairline); border-radius: 6px;
   padding: 5px 11px; min-height: 32px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
 }
+a.btn { color: inherit; text-decoration: none; }
 .btn:hover:not(:disabled) { background: var(--surface-2); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
