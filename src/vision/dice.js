@@ -7,13 +7,19 @@ export const DEFAULT_DICE_OPTIONS = {
   minSideFraction: 0.025, // die side, as a fraction of the shorter frame dimension
   maxSideFraction: 0.45,
   minContrast: 45, // dice must be this much brighter than the surface, in grey levels
-  maxAspect: 1.35,
+  maxAspect: 1.45, // above 1 because a tilted view also shows one side of the die
   minFill: 0.5,
   minConfidence: 0.45,
 };
 
 const PATCH = 48;
 const PIP_MARGIN = 0.11; // ignore rounded die edges, which shade dark
+const MAX_PATTERN_OFFSET = 0.22; // how far the pip pattern may sit from the outline's centre
+const MAX_PATTERN_STRETCH = 1.45; // a tilted view foreshortens one axis
+const MIN_PIP_SIZE_RATIO = 0.3; // specks smaller than this share of the typical pip are noise
+const TOP_FACE_BRIGHTNESS = 0.88; // share of the face's white that still counts as top face
+const TOP_FACE_MIN_LIT = 0.35; // a row through three pips is still about half lit
+const MAX_SIDE_TRIM = 0.4; // never discard more than this much of the outline from one side
 
 export function toGray({ data, width, height }) {
   const gray = new Uint8Array(width * height);
@@ -186,30 +192,70 @@ const PIP_TEMPLATES = (() => {
   };
 })();
 
-/** Mean distance from pips to the canonical layout, in die-side units. Lower is better. */
+/**
+ * Mean distance from pips to the canonical layout, in die-side units. Lower is better.
+ * The layout is centred on the pips themselves and may stretch a little on each axis. On a
+ * tilted view the visible side of a die makes the outline larger than its top face, which
+ * moves and squashes the pattern relative to the outline but keeps its shape.
+ */
 function templateError(pips) {
   const templates = PIP_TEMPLATES[pips.length];
   if (!templates) return Infinity;
+  const centerU = pips.reduce((sum, p) => sum + p.u, 0) / pips.length;
+  const centerV = pips.reduce((sum, p) => sum + p.v, 0) / pips.length;
+  // The pattern must still sit on the die, not in a corner of it.
+  if (Math.hypot(centerU, centerV) > MAX_PATTERN_OFFSET) return Infinity;
+  if (pips.length === 1) return 0;
   let best = Infinity;
   for (const template of templates) {
-    for (let scale = 0.2; scale <= 0.34; scale += 0.02) {
-      const free = template.map(([x, y]) => [x * scale, y * scale]);
-      let total = 0;
-      for (const pip of pips) {
-        let nearest = Infinity;
-        let index = -1;
-        free.forEach((t, i) => {
-          if (!t) return;
-          const d = Math.hypot(t[0] - pip.u, t[1] - pip.v);
-          if (d < nearest) { nearest = d; index = i; }
-        });
-        total += nearest;
-        free[index] = null;
+    for (let scaleU = 0.14; scaleU <= 0.34; scaleU += 0.02) {
+      for (let scaleV = 0.14; scaleV <= 0.34; scaleV += 0.02) {
+        if (Math.max(scaleU, scaleV) / Math.min(scaleU, scaleV) > MAX_PATTERN_STRETCH) continue;
+        const free = template.map(([x, y]) => [x * scaleU, y * scaleV]);
+        let total = 0;
+        for (const pip of pips) {
+          let nearest = Infinity;
+          let index = -1;
+          free.forEach((t, i) => {
+            if (!t) return;
+            const d = Math.hypot(t[0] - (pip.u - centerU), t[1] - (pip.v - centerV));
+            if (d < nearest) { nearest = d; index = i; }
+          });
+          total += nearest;
+          free[index] = null;
+        }
+        best = Math.min(best, total / pips.length);
       }
-      best = Math.min(best, total / pips.length);
     }
   }
   return best;
+}
+
+/**
+ * Narrows the search to the die's top face. On a tilted view, a side face shows along one
+ * edge. It's usually darker than the top, and any dots on it must not be counted.
+ */
+function topFaceBounds(patch, white, lo, hi) {
+  const bright = white * TOP_FACE_BRIGHTNESS;
+  const litShare = (count, at) => {
+    let lit = 0;
+    for (let i = lo; i < hi; i++) if (at(i, count) >= bright) lit++;
+    return lit / (hi - lo);
+  };
+  const atRow = (x, y) => patch[y * PATCH + x];
+  const atColumn = (y, x) => patch[y * PATCH + x];
+  const limit = Math.floor(PATCH * MAX_SIDE_TRIM);
+  const scan = (start, step, at) => {
+    let line = start;
+    while (Math.abs(line - start) < limit && litShare(line, at) < TOP_FACE_MIN_LIT) line += step;
+    return line;
+  };
+  return {
+    top: scan(lo, 1, atRow),
+    bottom: scan(hi - 1, -1, atRow) + 1,
+    left: scan(lo, 1, atColumn),
+    right: scan(hi - 1, -1, atColumn) + 1,
+  };
 }
 
 function readPips(gray, width, height, rect) {
@@ -235,12 +281,14 @@ function readPips(gray, width, height, rect) {
   const white = percentile(hist, inner.length, 0.8);
   const dark = percentile(hist, inner.length, 0.01);
   const contrast = white - dark;
-  if (contrast < 40) return { value: null, confidence: 0, pips: [], reason: 'no-pips' };
-
   const threshold = (white + dark) / 2;
+  const view = { patch, threshold, margin: lo };
+  if (contrast < 40) return { value: null, confidence: 0, pips: [], reason: 'no dark dots found', ...view };
+
+  const face = topFaceBounds(patch, white, lo, hi);
   const mask = new Uint8Array(PATCH * PATCH);
-  for (let y = lo; y < hi; y++) {
-    for (let x = lo; x < hi; x++) {
+  for (let y = face.top; y < face.bottom; y++) {
+    for (let x = face.left; x < face.right; x++) {
       if (patch[y * PATCH + x] < threshold) mask[y * PATCH + x] = 1;
     }
   }
@@ -261,21 +309,31 @@ function readPips(gray, width, height, rect) {
     pips.push({ u: cx / PATCH - 0.5, v: cy / PATCH - 0.5, area: region.area });
   }
 
-  const positions = pips.map((p) => ({
+  // Dust and sensor speckle make tiny dark marks. Real pips on a die are all similar in size.
+  const sizes = pips.map((p) => p.area).sort((a, b) => a - b);
+  const typical = sizes[Math.floor(sizes.length / 2)];
+  const kept = pips.filter((p) => p.area >= typical * MIN_PIP_SIZE_RATIO);
+
+  const positions = kept.map((p) => ({
     x: rect.cx + p.u * rect.w * rect.ux - p.v * rect.h * rect.uy,
     y: rect.cy + p.u * rect.w * rect.uy + p.v * rect.h * rect.ux,
   }));
-  if (pips.length < 1 || pips.length > 6) {
-    return { value: null, confidence: 0, pips: positions, reason: `${pips.length}-pips` };
+  if (kept.length < 1 || kept.length > 6) {
+    const reason = kept.length ? `counted ${kept.length} dots` : 'no dark dots found';
+    return { value: null, confidence: 0, pips: positions, reason, ...view };
   }
-  const error = templateError(pips);
-  const areas = pips.map((p) => p.area);
+  const error = templateError(kept);
+  const areas = kept.map((p) => p.area);
   const uniformity = Math.min(...areas) / Math.max(...areas);
-  const geometryScore = Math.max(0, 1 - error / 0.14);
+  const geometryScore = error === Infinity ? 0 : Math.max(0, 1 - error / 0.1);
   const uniformityScore = Math.min(1, uniformity / 0.4);
   const contrastScore = Math.min(1, contrast / 90);
   const confidence = geometryScore * uniformityScore * contrastScore;
-  return { value: pips.length, confidence, pips: positions, reason: null, side };
+  let reason = null;
+  if (geometryScore < 0.5) reason = `counted ${kept.length}, but not in a die pattern`;
+  else if (uniformityScore < 0.5) reason = `counted ${kept.length}, but dot sizes differ too much`;
+  else if (contrastScore < 0.5) reason = `counted ${kept.length}, but dots are too faint`;
+  return { value: kept.length, confidence, pips: positions, reason, side, ...view };
 }
 
 function candidateFromRegion(region, grow, opts, limits) {
@@ -357,6 +415,7 @@ function evaluate(mask, gray, width, height, opts, limits) {
       confidence: read.confidence,
       pips: read.pips,
       reason: read.reason,
+      view: { patch: read.patch, threshold: read.threshold, margin: read.margin, size: PATCH },
     };
   }).sort((a, b) => a.cx - b.cx);
 

@@ -6,7 +6,9 @@ export const DEFAULT_ROLL_OPTIONS = {
   motionThreshold: 0.002, // fraction of pixels that changed
   movementFrames: 2, // consecutive moving frames before it counts as a throw
   quietFrames: 3, // consecutive still frames before reading starts
-  stableFrames: 6, // consecutive identical readings needed to confirm
+  stableFrames: 6, // matching readings needed to confirm, among the most recent frames
+  spareFrames: 6, // how many extra recent frames may be unreadable without starting over
+  maxDisagreeing: 1, // recent readings of a different value tolerated when confirming
   settleTimeoutFrames: 45, // give up and ask a human after this many still frames
   warmupFrames: 15, // camera auto-exposure settling; also captures dice already on the table
   samePoseTolerance: 0.5, // in die sides
@@ -27,21 +29,16 @@ export function createRollDetector(options = {}) {
   let moving = 0;
   let quiet = 0;
   let settle = 0;
-  let streak = 0;
-  let streakKey = null;
-  let streakPose = null;
-  let streakConfidence = 1;
+  let recent = [];
   // Where the dice were at the last accepted rest. Motion that leaves them in the same
   // place with the same faces was a hand or a shadow passing, not a throw.
   let restPose = null;
   let restKey = null;
 
   const resetConsensus = () => {
-    streak = 0;
-    streakKey = null;
-    streakPose = null;
-    streakConfidence = 1;
+    recent = [];
     settle = 0;
+    moving = 0;
   };
 
   function update({ motion, reading }) {
@@ -77,25 +74,31 @@ export function createRollDetector(options = {}) {
         break;
       case 'SETTLING': {
         if (isMoving) {
-          state = 'MOVEMENT';
-          quiet = 0;
+          // One noisy frame (a focus or exposure change) is not the dice moving again.
+          moving++;
+          if (moving >= cfg.movementFrames) {
+            state = 'MOVEMENT';
+            quiet = 0;
+          }
           break;
         }
+        moving = 0;
         settle++;
+        recent.push(reading?.status === 'ok' ? reading : null);
+        if (recent.length > cfg.stableFrames + cfg.spareFrames) recent.shift();
+
         if (reading?.status === 'ok') {
           const key = valueKey(reading.values);
-          const steady = key === streakKey && samePose(reading.dice, streakPose, 0.25);
-          if (steady) {
-            streak++;
-            streakConfidence = Math.min(streakConfidence, reading.confidence);
-          } else {
-            streak = 1;
-            streakConfidence = reading.confidence;
-          }
-          streakKey = key;
-          streakPose = reading.dice;
+          const readings = recent.filter(Boolean);
+          const agreeing = readings.filter(
+            (r) => valueKey(r.values) === key && samePose(r.dice, reading.dice, 0.25),
+          );
+          // Frames the camera couldn't read don't count against a throw, because real video
+          // drops in and out. A different value does: the dice would not really have settled.
+          const disagreeing = readings.length - agreeing.length;
 
-          if (streak >= cfg.stableFrames) {
+          if (agreeing.length >= cfg.stableFrames && disagreeing <= cfg.maxDisagreeing) {
+            const confidence = Math.min(...agreeing.map((r) => r.confidence));
             const unchanged = key === restKey && samePose(reading.dice, restPose, cfg.samePoseTolerance);
             restPose = reading.dice;
             restKey = key;
@@ -111,14 +114,11 @@ export function createRollDetector(options = {}) {
                 type: 'roll',
                 d1: reading.values[0],
                 d2: reading.values[1],
-                confidence: streakConfidence,
-                frames: streak,
+                confidence,
+                frames: agreeing.length,
               },
             };
           }
-        } else {
-          streak = 0;
-          streakKey = null;
         }
         if (settle >= cfg.settleTimeoutFrames) {
           state = 'WAITING';

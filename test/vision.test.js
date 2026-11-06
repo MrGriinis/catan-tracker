@@ -191,6 +191,43 @@ test('fails closed: strongly off-axis camera never records a wrong value', () =>
   assert.equal(r.wrong, 0, JSON.stringify(r));
 });
 
+test('tilted camera: side faces, even with their own dots, do not change the count', () => {
+  const addSideDots = (frame, dice) => {
+    addSideWalls(frame, dice, 0.4);
+    const { width: w, data } = frame;
+    for (const d of dice) {
+      const c = Math.cos(d.angle);
+      const s = Math.sin(d.angle);
+      const v = d.side * 0.7;
+      for (let u = -5; u <= 5; u += 0.5) {
+        for (let t = -3; t <= 3; t += 0.5) {
+          const i = (Math.round(d.cy + u * s + (v + t) * c) * w + Math.round(d.cx + u * c - (v + t) * s)) * 4;
+          if (i >= 0 && i < data.length) data[i] = data[i + 1] = data[i + 2] = 30;
+        }
+      }
+    }
+    return frame;
+  };
+  const r = degraded(addSideDots);
+  assert.equal(r.wrong, 0, JSON.stringify(r));
+  assert.ok(r.right >= 33, JSON.stringify(r));
+});
+
+test('a rejected die explains why, for the on-screen diagnostics', () => {
+  const result = detectDice(renderScene({
+    width: W,
+    height: H,
+    dice: [
+      { cx: 200, cy: 200, side: 70, angle: 0, value: 0 },
+      { cx: 400, cy: 200, side: 70, angle: 0, value: 3 },
+    ],
+  }));
+  assert.equal(result.status, 'unreadable');
+  assert.match(result.dice[0].reason, /no dark dots/);
+  assert.equal(result.dice[1].value, 3);
+  assert.equal(result.dice[0].view.patch.length, 48 * 48);
+});
+
 test('fails closed: dice on a pale table are rejected as low contrast', () => {
   const dice = [
     { cx: 200, cy: 200, side: 70, angle: 0, value: 3 },
@@ -286,6 +323,45 @@ test('one flickering frame only delays confirmation, it does not corrupt the val
   const out = rolls(run(frames).events);
   assert.equal(out.length, 1);
   assert.equal(out[0].d1 + out[0].d2, 10);
+});
+
+test('real video: a reading that keeps dropping out is still confirmed', () => {
+  const unreadable = { motion: 0, reading: { status: 'unreadable', dice: [] } };
+  const frames = [...moving(5)];
+  for (let i = 0; i < 12; i++) frames.push({ motion: 0, reading: ok(2, 5) }, unreadable);
+  const out = rolls(run(frames).events);
+  assert.equal(out.length, 1);
+  assert.deepEqual([out[0].d1, out[0].d2], [2, 5]);
+});
+
+test('real video: one noisy frame while settling does not restart the throw', () => {
+  // The first three still frames only move it from MOVEMENT to SETTLING.
+  const frames = [...moving(5), ...still(ok(4, 6), 6), { motion: 0.05, reading: null }, ...still(ok(4, 6), 3)];
+  const { events, states } = run(frames);
+  assert.equal(rolls(events).length, 1);
+  assert.equal(states[11], 'SETTLING', 'the blip must not send it back to MOVEMENT');
+});
+
+test('real video: small jitter in position does not restart the count', () => {
+  const frames = [...moving(5)];
+  for (let i = 0; i < 12; i++) frames.push({ motion: 0, reading: ok(3, 3, 100 + (i % 2) * 6) });
+  assert.equal(rolls(run(frames).events).length, 1);
+});
+
+test('safety: a value that flips back and forth is never recorded', () => {
+  const frames = [...moving(5)];
+  for (let i = 0; i < 60; i++) frames.push({ motion: 0, reading: ok(i % 3 ? 2 : 3, 4) });
+  assert.equal(rolls(run(frames).events).length, 0);
+});
+
+test('safety: a persistent minority reading blocks confirmation until it clears', () => {
+  // Six readings agree, but three recent ones say something else, so this must wait.
+  const undecided = [...moving(5), ...still(ok(1, 1), 8), ...still(ok(2, 2), 3), ...still(ok(1, 1), 1)];
+  assert.equal(rolls(run(undecided).events).length, 0);
+  // Once the conflicting readings have aged out, the throw is confirmed.
+  const out = rolls(run([...undecided, ...still(ok(1, 1), 12)]).events);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].d1, 1);
 });
 
 test('picking the dice up off the table raises no alarm', () => {

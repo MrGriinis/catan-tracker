@@ -50,6 +50,11 @@
         <p class="status" id="reader-status" aria-live="polite">Camera off</p>
         <div class="meter" title="Motion in the dice area. The tick marks the movement threshold."><div id="motion-bar"></div><i id="motion-mark"></i></div>
 
+        <div class="reader-debug" id="reader-debug" hidden aria-label="Each die as the reader sees it">
+          <figure><canvas></canvas><span></span></figure>
+          <figure><canvas></canvas><span></span></figure>
+        </div>
+
         <div id="sim-controls" hidden>
           <div class="row">
             <button class="btn" data-action="roll-sim">Throw</button>

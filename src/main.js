@@ -249,6 +249,36 @@ function toast(message) {
 
 // ---------- Camera ----------
 
+/** A magnified view of each die as the reader sees it, with dots it treats as dark in pink. */
+function renderReaderDebug(reading) {
+  const box = $('#reader-debug');
+  const dice = reading?.dice ?? [];
+  box.hidden = !$('#debug-toggle').checked || !dice.length;
+  if (box.hidden) return;
+  dice.slice(0, 2).forEach((die, i) => {
+    const slot = box.children[i];
+    slot.hidden = false;
+    const { patch, threshold, size } = die.view;
+    const canvas = slot.querySelector('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const image = ctx.createImageData(size, size);
+    for (let p = 0; p < patch.length; p++) {
+      const dark = patch[p] < threshold;
+      image.data[p * 4] = dark ? 255 : patch[p];
+      image.data[p * 4 + 1] = dark ? 61 : patch[p];
+      image.data[p * 4 + 2] = dark ? 138 : patch[p];
+      image.data[p * 4 + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+    slot.querySelector('span').textContent = die.value != null
+      ? `Reads ${die.value} (${Math.round(die.confidence * 100)}%)`
+      : die.reason ?? `Too unsure (${Math.round(die.confidence * 100)}%)`;
+  });
+  if (dice.length < 2) box.children[1].hidden = true;
+}
+
 const video = $('#video');
 const overlay = $('#overlay');
 const pipeline = createPipeline({
@@ -264,6 +294,7 @@ const pipeline = createPipeline({
     else if (reading.status === 'ok') text = `Reading ${reading.values[0]} + ${reading.values[1]} (${Math.round(reading.confidence * 100)}% confidence)`;
     else text = STATUS_TEXT[reading.status] ?? reading.status;
     $('#reader-status').textContent = text;
+    renderReaderDebug(reading);
   },
   onEvent(event) {
     if (event.type === 'roll') onDetectedRoll(event);
