@@ -335,11 +335,72 @@ test('real video: a reading that keeps dropping out is still confirmed', () => {
 });
 
 test('real video: one noisy frame while settling does not restart the throw', () => {
-  // The first three still frames only move it from MOVEMENT to SETTLING.
-  const frames = [...moving(5), ...still(ok(4, 6), 6), { motion: 0.05, reading: null }, ...still(ok(4, 6), 3)];
+  // Three still frames move it from MOVEMENT to SETTLING, and the blip lands right after.
+  const frames = [...moving(5), ...still(ok(4, 6), 4), { motion: 0.05, reading: null }, ...still(ok(4, 6), 3)];
   const { events, states } = run(frames);
   assert.equal(rolls(events).length, 1);
-  assert.equal(states[11], 'SETTLING', 'the blip must not send it back to MOVEMENT');
+  assert.equal(states[9], 'SETTLING', 'the blip must not send it back to MOVEMENT');
+});
+
+/** Dice at rest seen by a shaking camera: both shift together, and the picture never settles. */
+function shaking(a, b, n, gap = 200) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const dx = 100 + (i % 5) * 9;
+    const dy = 100 + (i % 3) * 7;
+    out.push({
+      motion: 0.3,
+      reading: {
+        status: 'ok',
+        values: [a, b],
+        confidence: 0.8,
+        dice: [{ cx: dx, cy: dy, side: 50 }, { cx: dx + gap, cy: dy + 40, side: 50 }],
+      },
+    });
+  }
+  return out;
+}
+
+test('handheld: a throw is recorded although the picture never stops moving', () => {
+  const { events } = run([...moving(6), ...shaking(5, 6, 12)]);
+  const out = rolls(events);
+  assert.equal(out.length, 1);
+  assert.deepEqual([out[0].d1, out[0].d2], [5, 6]);
+});
+
+test('handheld: resting dice are recorded only once, however long the camera shakes', () => {
+  const { events } = run([...moving(6), ...shaking(5, 6, 400)]);
+  assert.equal(rolls(events).length, 1);
+});
+
+test('handheld: a new throw with the same values but a different layout still counts', () => {
+  const { events } = run([...moving(6), ...shaking(3, 3, 30), ...moving(6), ...shaking(3, 3, 30, 120)]);
+  assert.equal(rolls(events).length, 2);
+});
+
+test('handheld: dice already on the table when the camera starts are not recorded', () => {
+  const detector = createRollDetector({ warmupFrames: 15 });
+  let count = 0;
+  for (const frame of shaking(2, 6, 200)) {
+    if (detector.update(frame).event?.type === 'roll') count++;
+  }
+  assert.equal(count, 0);
+});
+
+test('safety: dice still tumbling are not recorded while their spacing keeps changing', () => {
+  const frames = [...moving(6)];
+  for (let i = 0; i < 40; i++) {
+    frames.push({
+      motion: 0.3,
+      reading: {
+        status: 'ok',
+        values: [4, 4],
+        confidence: 0.9,
+        dice: [{ cx: 100, cy: 100, side: 50 }, { cx: 150 + i * 40, cy: 100, side: 50 }],
+      },
+    });
+  }
+  assert.equal(rolls(run(frames).events).length, 0);
 });
 
 test('real video: small jitter in position does not restart the count', () => {
@@ -356,7 +417,7 @@ test('safety: a value that flips back and forth is never recorded', () => {
 
 test('safety: a persistent minority reading blocks confirmation until it clears', () => {
   // Six readings agree, but three recent ones say something else, so this must wait.
-  const undecided = [...moving(5), ...still(ok(1, 1), 8), ...still(ok(2, 2), 3), ...still(ok(1, 1), 1)];
+  const undecided = [...moving(5), ...still(ok(1, 1), 5), ...still(ok(2, 2), 3), ...still(ok(1, 1), 1)];
   assert.equal(rolls(run(undecided).events).length, 0);
   // Once the conflicting readings have aged out, the throw is confirmed.
   const out = rolls(run([...undecided, ...still(ok(1, 1), 12)]).events);

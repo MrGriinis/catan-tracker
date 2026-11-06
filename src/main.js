@@ -25,6 +25,8 @@ const STATUS_TEXT = {
   unreadable: 'Dice found, but the pips are unreadable',
 };
 const STATES = ['WAITING', 'MOVEMENT', 'SETTLING', 'CONFIRMED'];
+const UNSTEADY_AFTER_FRAMES = 45; // about 3 seconds of constant motion
+let unsteadyFrames = 0;
 
 let browserStorage;
 try {
@@ -290,9 +292,10 @@ const pipeline = createPipeline({
     }
     $('#motion-bar').style.width = `${Math.min(100, (motion / (threshold * 5)) * 100)}%`;
     let text;
-    if (!reading) text = 'Movement: reading paused';
-    else if (reading.status === 'ok') text = `Reading ${reading.values[0]} + ${reading.values[1]} (${Math.round(reading.confidence * 100)}% confidence)`;
+    if (reading.status === 'ok') text = `Reading ${reading.values[0]} + ${reading.values[1]} (${Math.round(reading.confidence * 100)}% confidence)`;
     else text = STATUS_TEXT[reading.status] ?? reading.status;
+    unsteadyFrames = motion > threshold ? unsteadyFrames + 1 : 0;
+    if (unsteadyFrames > UNSTEADY_AFTER_FRAMES) text += '. The camera looks unsteady: a stand gives the best results.';
     $('#reader-status').textContent = text;
     renderReaderDebug(reading);
   },
@@ -301,9 +304,9 @@ const pipeline = createPipeline({
     else if (event.type === 'uncertain') {
       ui.uncertain = event;
       renderUncertain();
-    } else if (event.type === 'ignored') {
-      toast('Movement seen, but the dice did not change. No roll recorded.');
     }
+    // A resting-dice check that finds nothing new is normal, so it gets no message: on an
+    // unsteady camera it happens constantly.
   },
 });
 

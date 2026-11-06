@@ -71,8 +71,9 @@ To use your own Firebase project, fill in `src/sync/firebaseConfig.js` and publi
 
 | Setting | What to do | Why |
 |---|---|---|
-| Angle | Point the camera nearly straight down | When side faces cover about 30% of a die's width, almost every throw is rejected |
-| Surface | Use a dark matte tray or cloth | Light dice must stand out: on a pale table every throw is rejected |
+| Mounting | Use a stand, not your hand | A handheld camera can work, but steadiness makes results more reliable |
+| Angle | Point the camera as straight down as you can | A tilted view works, but straight down is the most reliable |
+| Surface | Use anything clearly darker than the dice | Mid-tone wood has worked. On a very pale table every throw is rejected |
 | Dice | Light dice with dark pips | Red or other dark dice with white pips are not supported yet |
 | Dice area | Click **Set dice area** and drag around the tray | Keeps out white game pieces, cards and hands |
 | Size | Aim for dice at least 25 pixels wide on the video | Tested down to 18 px, but real sensors are noisier |

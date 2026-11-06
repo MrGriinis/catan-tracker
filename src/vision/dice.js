@@ -16,6 +16,7 @@ const PATCH = 48;
 const PIP_MARGIN = 0.11; // ignore rounded die edges, which shade dark
 const MAX_PATTERN_OFFSET = 0.22; // how far the pip pattern may sit from the outline's centre
 const MAX_PATTERN_STRETCH = 1.45; // a tilted view foreshortens one axis
+const PATTERN_ANGLES = [-0.42, -0.28, -0.14, 0, 0.14, 0.28, 0.42]; // radians, up to about 24 degrees
 const MIN_PIP_SIZE_RATIO = 0.3; // specks smaller than this share of the typical pip are noise
 const TOP_FACE_BRIGHTNESS = 0.88; // share of the face's white that still counts as top face
 const TOP_FACE_MIN_LIT = 0.35; // a row through three pips is still about half lit
@@ -211,20 +212,29 @@ function templateError(pips) {
     for (let scaleU = 0.14; scaleU <= 0.34; scaleU += 0.02) {
       for (let scaleV = 0.14; scaleV <= 0.34; scaleV += 0.02) {
         if (Math.max(scaleU, scaleV) / Math.min(scaleU, scaleV) > MAX_PATTERN_STRETCH) continue;
-        const free = template.map(([x, y]) => [x * scaleU, y * scaleV]);
-        let total = 0;
-        for (const pip of pips) {
-          let nearest = Infinity;
-          let index = -1;
-          free.forEach((t, i) => {
-            if (!t) return;
-            const d = Math.hypot(t[0] - (pip.u - centerU), t[1] - (pip.v - centerV));
-            if (d < nearest) { nearest = d; index = i; }
+        // The outline includes the visible side, so it can sit at a slight angle to the face.
+        for (const angle of PATTERN_ANGLES) {
+          const cos = Math.cos(angle);
+          const sin = Math.sin(angle);
+          const free = template.map(([x, y]) => {
+            const u = x * scaleU;
+            const v = y * scaleV;
+            return [u * cos - v * sin, u * sin + v * cos];
           });
-          total += nearest;
-          free[index] = null;
+          let total = 0;
+          for (const pip of pips) {
+            let nearest = Infinity;
+            let index = -1;
+            free.forEach((t, i) => {
+              if (!t) return;
+              const d = Math.hypot(t[0] - (pip.u - centerU), t[1] - (pip.v - centerV));
+              if (d < nearest) { nearest = d; index = i; }
+            });
+            total += nearest;
+            free[index] = null;
+          }
+          best = Math.min(best, total / pips.length);
         }
-        best = Math.min(best, total / pips.length);
       }
     }
   }

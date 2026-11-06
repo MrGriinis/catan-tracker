@@ -100,8 +100,8 @@ export function createPipeline({ video, overlay, onFrame, onEvent }) {
     workCtx.drawImage(video, crop.x, crop.y, cw, ch, 0, 0, w, h);
     const frame = workCtx.getImageData(0, 0, w, h);
     const motion = meter.update(frame);
-    // Reading a moving die wastes time and can only produce noise.
-    const reading = motion <= detector.options.motionThreshold ? detectDice(frame) : null;
+    // Read every frame: on a handheld camera the picture never stops moving.
+    const reading = detectDice(frame);
     lastReading = reading;
     const { state, event } = detector.update({ motion, reading });
     drawOverlay();
