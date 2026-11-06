@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // A shared game can be read by anyone who has its unguessable code. Nobody can list
+    // the collection to discover codes. Only the signed-in player who created it can
+    // change or delete it, and ownership can never be handed to someone else.
+    match /liveGames/{code} {
+      function validDoc() {
+        let data = request.resource.data;
+        return data.keys().hasOnly(['ownerUid', 'name', 'eventsJson'])
+          && data.ownerUid == request.auth.uid
+          && data.name is string && data.name.size() <= 200
+          && data.eventsJson is string && data.eventsJson.size() <= 900000;
+      }
+
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.auth != null && code.size() >= 22 && validDoc();
+      allow update: if request.auth != null && resource.data.ownerUid == request.auth.uid && validDoc();
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

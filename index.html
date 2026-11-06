@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Catan Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Catan Tracker</h1>
+    <select id="game-select" aria-label="Current game"></select>
+    <button class="btn" id="new-game">New game</button>
+    <span class="small muted" id="share-urls" hidden></span>
+    <span class="spacer"></span>
+    <button class="btn primary" id="share-start" hidden>Share with players</button>
+    <button class="btn" id="share-copy" hidden>Copy player link</button>
+    <button class="btn" id="share-stop" hidden>Stop sharing</button>
+    <a class="btn" id="open-dashboard" href="dashboard.html">Player dashboard</a>
+    <button class="btn" id="undo">Undo</button>
+    <button class="btn" id="export-csv">Export CSV</button>
+    <button class="btn" id="export-json">Export JSON</button>
+  </header>
+
+  <main class="layout">
+    <aside class="rail">
+      <section class="card">
+        <div class="stage" id="stage">
+          <video id="video" muted playsinline></video>
+          <canvas id="overlay"></canvas>
+          <div class="stage-empty">Camera off</div>
+          <div class="sim-banner" id="sim-banner" hidden>SIMULATED CAMERA: synthetic frames, not real dice</div>
+        </div>
+        <div class="row">
+          <select id="source" aria-label="Video source" class="grow">
+            <option value="default">Default camera</option>
+            <option value="file">Video file…</option>
+            <option value="sim">Simulated camera</option>
+          </select>
+          <button class="btn primary" id="source-start">Start</button>
+          <button class="btn" id="source-stop" hidden>Stop</button>
+          <input type="file" id="video-file" accept="video/*" hidden>
+        </div>
+        <ol class="states" aria-label="Roll detector state">
+          <li id="state-WAITING">Waiting</li>
+          <li id="state-MOVEMENT">Movement</li>
+          <li id="state-SETTLING">Settling</li>
+          <li id="state-CONFIRMED">Confirmed</li>
+        </ol>
+        <p class="status" id="reader-status" aria-live="polite">Camera off</p>
+        <div class="meter" title="Motion in the dice area. The tick marks the movement threshold."><div id="motion-bar"></div><i id="motion-mark"></i></div>
+
+        <div id="sim-controls" hidden>
+          <div class="row">
+            <button class="btn" data-action="roll-sim">Throw</button>
+            <button class="btn" data-action="repeat-sim">Throw same result</button>
+            <button class="btn" data-action="hand-sim">Pass a hand over</button>
+          </div>
+          <p class="small muted" id="sim-score"></p>
+        </div>
+
+        <div class="row">
+          <button class="btn" id="roi-set">Set dice area</button>
+          <button class="btn" id="roi-reset">Use full frame</button>
+        </div>
+        <details>
+          <summary>Tuning</summary>
+          <label class="check"><input type="checkbox" id="debug-toggle"> Show what the reader sees</label>
+          <label class="slider">Movement threshold <span id="motion-value"></span>
+            <input type="range" id="motion-sensitivity" min="0.5" max="20" step="0.5"></label>
+          <label class="slider">Stable frames to confirm <span id="stable-value"></span>
+            <input type="range" id="stable-frames" min="3" max="15" step="1"></label>
+        </details>
+      </section>
+
+      <section class="alert" id="uncertain" hidden></section>
+
+      <section class="card"><h2>Latest roll</h2><div id="latest"></div></section>
+
+      <section class="card">
+        <h2>Add a roll by hand</h2>
+        <div class="seg-row" id="manual-d1" role="group" aria-label="Die 1"></div>
+        <div class="seg-row" id="manual-d2" role="group" aria-label="Die 2"></div>
+        <button class="btn primary wide" id="manual-add" data-action="manual-add" disabled>Add roll</button>
+      </section>
+    </aside>
+
+    <div class="content">
+      <nav class="tabs" role="tablist">
+        <button data-tab="dice" role="tab">Dice</button>
+        <button data-tab="board" role="tab">Board</button>
+        <button data-tab="players" role="tab">Players</button>
+        <button data-tab="timeline" role="tab">Timeline</button>
+        <button data-tab="games" role="tab">Games</button>
+      </nav>
+      <div id="tab-body"></div>
+    </div>
+  </main>
+
+  <dialog id="new-game-dialog">
+    <form id="new-game-form">
+      <h2>New game</h2>
+      <label class="field">Name <input name="name" maxlength="40" required></label>
+      <label class="field">Players
+        <select name="count"><option value="3">3</option><option value="4">4</option></select>
+      </label>
+      <p class="small muted">Enter players in seating order, starting with whoever rolls first. Turns are inferred from this order.</p>
+      <div id="player-rows"></div>
+      <div class="row end">
+        <button type="button" class="btn" id="new-game-cancel">Cancel</button>
+        <button class="btn primary">Start game</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="frame-dialog">
+    <h2>What the camera saw</h2>
+    <img id="frame-img" alt="Frame captured when this roll was confirmed">
+    <div class="row end"><button class="btn" id="frame-close">Close</button></div>
+  </dialog>
+
+  <div id="toast" role="status" hidden></div>
+  <div id="tip" hidden></div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

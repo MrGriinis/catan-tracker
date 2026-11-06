@@ -1,0 +1,12 @@
+{
+  "name": "catan-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline camera-based dice and game tracker for a physical Catan board.",
+  "scripts": {
+    "start": "node serve.js",
+    "share": "node serve.js --share",
+    "test": "node --test"
+  }
+}

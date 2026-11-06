@@ -1,0 +1,74 @@
+/* Player dashboard: read from across a table, so type is larger than on the tracker. */
+.dash { display: grid; gap: 12px; padding: 12px 16px 16px; font-size: 15px; }
+.dash-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.dash-top h1 { font-size: 18px; }
+.dash-top .btn { align-self: center; text-decoration: none; color: inherit; }
+
+.badge-warn { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+
+.dash-now { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); gap: 12px; }
+.dash-label { font-size: 13px; color: var(--ink-2); }
+.next-name { font-size: clamp(30px, 4vw, 52px); font-weight: 700; line-height: 1.15; display: flex; align-items: center; gap: 12px; overflow-wrap: anywhere; }
+.next-name .pdot { width: .6em; height: .6em; margin: 0; flex: none; }
+.roll-now { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.roll-now .dice { display: flex; gap: 8px; }
+.roll-total { font-size: clamp(44px, 6vw, 72px); font-weight: 700; line-height: 1; }
+.roll-detail { flex: 1; min-width: 220px; }
+.roll-detail p { margin: 2px 0; font-size: 16px; }
+.new-roll { animation: pop .45s ease-out; }
+@keyframes pop { from { transform: scale(.82); opacity: .3; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .new-roll { animation: none; } }
+
+.dash-alert { background: var(--warn-bg); border: 1px solid var(--hairline); border-radius: 10px; padding: 8px 14px; font-weight: 600; font-size: 17px; }
+
+.dash-players { display: grid; grid-template-columns: repeat(var(--players, 4), minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1180px) { .dash-players.even { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 800px) { .dash-players { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 580px) { .dash-players, .dash-players.even { grid-template-columns: minmax(0, 1fr); } }
+.player-card { display: grid; gap: 8px; align-content: start; }
+.player-card.next { outline: 3px solid var(--accent); outline-offset: -1px; }
+.player-head { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; font-size: 18px; font-weight: 650; min-width: 0; }
+.player-head .name { overflow-wrap: anywhere; min-width: 0; }
+.next-tag { margin-left: auto; font-size: 12px; font-weight: 600; background: var(--accent); color: var(--accent-ink); padding: 1px 8px; border-radius: 9px; }
+.vp { display: flex; align-items: baseline; gap: 6px; }
+.vp-value { font-size: 42px; font-weight: 700; line-height: 1; }
+.vp-track { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; }
+.vp-track i { height: 8px; background: var(--surface-2); border-radius: 2px; }
+.awards { display: flex; flex-wrap: wrap; gap: 4px; min-height: 20px; }
+.counts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; text-align: center; }
+.round { border-top: 1px solid var(--hairline); padding-top: 8px; display: grid; gap: 6px; }
+.round-head { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.round-head b { font-size: 16px; color: var(--ink); }
+.round-blocked { margin-left: auto; color: var(--warn); font-weight: 600; }
+.res { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; text-align: center; }
+.res i { display: block; height: 3px; border-radius: 2px; margin-bottom: 4px; }
+/* Same line box for +n and the dash, so cards don't jump between rolls. */
+.res b { display: block; font-size: 32px; line-height: 38px; font-weight: 700; color: var(--muted); opacity: .45; font-variant-numeric: tabular-nums; }
+.res .got b { color: var(--ink); opacity: 1; }
+.res span { display: block; font-size: 12px; color: var(--ink-2); }
+.res .got span { color: var(--ink); font-weight: 600; }
+.res small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* Cumulative figures stay readable but recede behind the latest roll. */
+.counts { border-top: 1px solid var(--hairline); padding-top: 6px; }
+.counts b { display: block; font-size: 14px; font-weight: 600; line-height: 1.2; color: var(--ink-2); }
+.counts span { font-size: 11px; color: var(--muted); }
+.player-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; font-size: 12px; color: var(--muted); }
+.player-foot b { color: var(--ink-2); font-weight: 600; }
+.dash .tile { padding: 6px 12px; }
+.dash .tile-value { font-size: 18px; font-weight: 600; color: var(--ink-2); }
+.dash-lower h3 { color: var(--ink-2); }
+
+.dash-lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 12px; align-items: start; }
+.dash-lower .board { max-height: 62vh; margin: 0 auto; }
+.dash-side { display: grid; gap: 12px; min-width: 0; }
+.dash-feed { list-style: none; margin: 0; padding: 0; }
+.dash-feed li { display: flex; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--hairline); }
+.dash-feed li:last-child { border: 0; }
+.dash-feed time { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.dash-footnote { font-size: 12.5px; color: var(--muted); margin: 0; }
+.dash-empty { display: grid; place-items: center; text-align: center; min-height: 70vh; }
+
+@media (max-width: 900px) {
+  .dash-now, .dash-lower { grid-template-columns: minmax(0, 1fr); }
+}
