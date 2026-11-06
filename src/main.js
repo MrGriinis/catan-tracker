@@ -101,8 +101,10 @@ async function startSharing() {
   try {
     const api = await loadCloud();
     cloud.user = (await api.currentUser()) ?? (await api.signIn());
-    if (!liveCode()) prefs.save(codeKey(gameId), makeCode());
-    publishCloud();
+    // Save first, so the app never hands out a link to a game that isn't online.
+    const code = liveCode() ?? makeCode();
+    await api.publishGame(code, buildLiveDoc({ uid: cloud.user.uid, name: state.game?.name, events }));
+    prefs.save(codeKey(gameId), code);
     renderShare();
     await copyPlayerLink();
   } catch (error) {
